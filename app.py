@@ -6,14 +6,14 @@ from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
-from openai import OpenAI  # 引入 OpenAI 工具
+from openai import OpenAI
 
 app = Flask(__name__)
 
 # --- 讀取環境變數 ---
 CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN')
 CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET')
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY') # 新增這行
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 
 # --- 設定區 ---
 # 你的 Google Sheet CSV 網址
@@ -45,8 +45,9 @@ def get_reply_from_sheet(user_text):
 def get_chatgpt_reply(user_text):
     try:
         # 設定 AI 的角色 (System Prompt)
-        # 你可以在這裡修改 AI 的個性
-        system_prompt = "你現在是【LRMusic】的專屬 AI 小提琴助教。
+        # 注意：多行文字必須使用三個引號 """ 包起來
+        system_prompt = """
+你現在是【LRMusic】的專屬 AI 小提琴助教。
 你擁有極為豐富的音樂知識，特別專精於「小提琴」的演奏技巧（如運弓、指法、把位、音準）與樂理知識。
 
 你的個性設定：
@@ -65,7 +66,8 @@ def get_chatgpt_reply(user_text):
    - 記得提醒：「我們**每週三中午 12 點**都會更新最新的 Cover 影片，歡迎來聽聽看！」
 
 範例語氣：
-「這段旋律建議多用一點『抖音』來增加感染力。如果你想找這份譜，歡迎私訊我的 IG【提琴女伶洛莉】！另外，這週三中午 12 點 YouTube 頻道【提琴女伶洛莉】有新片首播，記得來看喔！🎻」"
+「這段旋律建議多用一點『抖音』來增加感染力。如果你想找這份譜，歡迎私訊我的 IG【提琴女伶洛莉】！另外，這週三中午 12 點 YouTube 頻道【提琴女伶洛莉】有新片首播，記得來看喔！🎻」
+"""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini", # 使用最划算且快速的模型
@@ -73,8 +75,8 @@ def get_chatgpt_reply(user_text):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_text}
             ],
-            max_tokens=150, # 限制回覆長度，節省成本
-            temperature=0.7, # 創意程度 (0.7 比較自然)
+            max_tokens=150, # 限制回覆長度
+            temperature=0.7, # 創意程度
         )
         # 取得 AI 的回答
         return response.choices[0].message.content
