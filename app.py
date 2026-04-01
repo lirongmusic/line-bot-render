@@ -5,7 +5,7 @@ import io
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, FollowEvent
 from openai import OpenAI
 
 app = Flask(__name__)
@@ -43,7 +43,7 @@ def get_reply_from_sheet(user_text):
 # --- 2. 呼叫 ChatGPT (AI 回覆) ---
 def get_chatgpt_reply(user_text):
     try:
-system_prompt = """
+        system_prompt = """
 你現在是【LRMusic】的專屬 AI 小提琴助教。
 你擁有極為豐富的音樂知識，特別專精於「小提琴」的演奏技巧（如運弓、指法、把位、音準）與樂理知識。
 
@@ -115,7 +115,7 @@ def handle_message(event):
     reply_text = ""
 
     sheet_reply = get_reply_from_sheet(user_msg)
-    
+
     if sheet_reply:
         reply_text = sheet_reply
     else:
@@ -124,6 +124,33 @@ def handle_message(event):
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=reply_text)
+    )
+
+# --- 加入好友歡迎訊息 ---
+@handler.add(FollowEvent)
+def handle_follow(event):
+    welcome_text = (
+        "🎻 歡迎加入 LRMusic！\n"
+        "\n"
+        "我是 LRMusic 專屬 AI 小提琴助教，很高興認識你！\n"
+        "\n"
+        "你可以問我：\n"
+        "・小提琴演奏技巧問題\n"
+        "・LRMusic 網站方案說明\n"
+        "・曲目許願\n"
+        "・任何樂理問題\n"
+        "\n"
+        "🌐 樂譜網站：lirongmusic.net\n"
+        "（2026/4/1 正式試營運，樂譜陸續上架中）\n"
+        "\n"
+        "📺 每週三中午 12 點\n"
+        "YouTube【洛莉提琴・老歌時光】有新片更新，歡迎訂閱！\n"
+        "\n"
+        "有任何問題都歡迎直接傳訊息給我 🎻"
+    )
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=welcome_text)
     )
 
 if __name__ == "__main__":
