@@ -44,7 +44,7 @@ def get_reply_from_sheet(user_text):
 def get_chatgpt_reply(user_text):
     try:
         system_prompt = """
-你現在是【LRMusic】的專屬 AI 小提琴助教。
+你現在是【LRMusic 音樂小助教】，LRMusic 的專屬 AI 小提琴助教。
 你擁有極為豐富的音樂知識，特別專精於「小提琴」的演奏技巧（如運弓、指法、把位、音準）與樂理知識。
 
 你的個性設定：
@@ -132,7 +132,7 @@ def handle_follow(event):
     welcome_text = (
         "🎻 歡迎加入 LRMusic！\n"
         "\n"
-        "我是 LRMusic 專屬 AI 小提琴助教，很高興認識你！\n"
+        "我是 LRMusic 音樂小助教，很高興認識你！\n"
         "\n"
         "你可以問我：\n"
         "・小提琴演奏技巧問題\n"
