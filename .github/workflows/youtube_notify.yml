@@ -1,0 +1,38 @@
+name: YouTube 新影片 LINE 推播
+
+on:
+  schedule:
+    - cron: "30 4 * * *"   # 台灣時間 12:30
+    - cron: "30 6 * * *"   # 台灣時間 14:30
+  workflow_dispatch:        # 允許手動觸發（測試用）
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 取出倉庫程式碼
+        uses: actions/checkout@v4
+
+      - name: 還原已推播紀錄快取
+        uses: actions/cache@v4
+        with:
+          path: sent_videos.json
+          key: sent-videos-cache-${{ github.run_id }}
+          restore-keys: |
+            sent-videos-cache-
+
+      - name: 安裝 Python 套件
+        run: pip install feedparser requests
+
+      - name: 執行推播腳本
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        run: python notify_youtube.py
+
+      - name: 儲存已推播紀錄快取
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: sent_videos.json
+          key: sent-videos-cache-${{ github.run_id }}
