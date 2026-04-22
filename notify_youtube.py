@@ -139,8 +139,14 @@ def build_line_message(channel_name: str, emoji: str, video: dict) -> dict:
     }
 
 
-def broadcast_to_line(messages: list, token: str):
-    """呼叫 LINE Broadcast API 廣播給所有好友"""
+def broadcast_to_line(messages: list, token: str) -> bool:
+    """呼叫 LINE Broadcast API 廣播給所有好友
+    
+    回傳值：
+        True  — 廣播成功
+        False — 月上限已達（429），優雅跳過
+    拋出例外：其他 HTTP 錯誤
+    """
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
@@ -150,9 +156,14 @@ def broadcast_to_line(messages: list, token: str):
 
     if resp.status_code == 200:
         print(f"[OK] LINE 廣播成功，共 {len(messages)} 則訊息")
-    else:
-        print(f"[ERROR] LINE 廣播失敗：{resp.status_code} {resp.text}")
-        resp.raise_for_status()
+        return True
+
+    if resp.status_code == 429:
+        print(f"[WARN] LINE 廣播月上限已達，本月暫停推播（影片 ID 仍會記錄，下個月不重複推播）")
+        return False
+
+    print(f"[ERROR] LINE 廣播失敗：{resp.status_code} {resp.text}")
+    resp.raise_for_status()
 
 
 def main():
@@ -183,13 +194,23 @@ def main():
         return
 
     # LINE 單次廣播最多 5 則訊息
+    quota_exceeded = False
     for i in range(0, len(messages_to_send), 5):
         batch = messages_to_send[i:i + 5]
-        broadcast_to_line(batch, token)
+        success = broadcast_to_line(batch, token)
+        if not success:
+            # 429：月上限，後續 batch 不再嘗試
+            quota_exceeded = True
+            break
 
+    # 無論是否 429，都記錄已偵測到的影片 ID，避免下次重複推播
     sent.update(newly_sent_ids)
     save_sent_log(sent)
-    print(f"[DONE] 推播完成，共 {len(newly_sent_ids)} 支新影片")
+
+    if quota_exceeded:
+        print(f"[DONE] 月上限已達，推播中止。已記錄 {len(newly_sent_ids)} 支影片 ID，下個月不重複推播")
+    else:
+        print(f"[DONE] 推播完成，共 {len(newly_sent_ids)} 支新影片")
 
 
 if __name__ == "__main__":
