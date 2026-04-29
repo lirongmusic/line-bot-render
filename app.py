@@ -32,7 +32,16 @@ def get_reply_from_sheet(user_text):
         response.encoding = 'utf-8'
         f = io.StringIO(response.text)
         reader = csv.DictReader(f)
-        for row in reader:
+        rows = list(reader)
+
+        # 檢查機器人開關（key = __bot_enabled__，msg = false 時靜音）
+        for row in rows:
+            if row['key'].strip() == '__bot_enabled__':
+                if row['msg'].strip().lower() == 'false':
+                    return '__SILENT__'
+                break
+
+        for row in rows:
             if row['key'] in user_text:
                 return row['msg'].replace('\\n', '\n')
         return None
@@ -112,9 +121,12 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     user_msg = event.message.text.strip()
-    reply_text = ""
 
     sheet_reply = get_reply_from_sheet(user_msg)
+
+    # 靜音模式：試算表開關設為 false，直接不回應
+    if sheet_reply == '__SILENT__':
+        return
 
     if sheet_reply:
         reply_text = sheet_reply
