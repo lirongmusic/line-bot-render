@@ -18,12 +18,36 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 # --- 設定區 ---
 SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQdYAgLzQ-n30rFghdLst7K3GIlp34QP8trjUtTIBTCV9dLEuDLH3ZEP6dBYWXw-K4LScsv0WFy9duF/pub?output=csv'
 
+# WordPress 網站設定（Line 綁定查詢用）
+LRM_SITE_URL    = 'https://lirongmusic.net'
+LRM_CRON_SECRET = os.environ.get('LRM_CRON_SECRET', '')  # 從環境變數讀取
+
 # 初始化 LINE Bot
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
 # 初始化 OpenAI (ChatGPT)
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+
+# --- 0. 查詢 WordPress 會員綁定狀態 ---
+def get_wp_user_by_line_id(line_user_id):
+    """查詢此 Line ID 是否已綁定 WordPress 帳號，回傳會員資料或 None"""
+    try:
+        r = requests.get(
+            f'{LRM_SITE_URL}/wp-json/lrmusic/v1/user/get-by-line-id',
+            params={'line_user_id': line_user_id},
+            headers={'X-LRM-Secret': LRM_CRON_SECRET},
+            timeout=5
+        )
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('found'):
+                return data  # {'wp_user_id': 123, 'email': '...', 'first_name': '...'}
+    except Exception as e:
+        print(f'[LRMusic] 查詢綁定狀態失敗：{e}')
+    return None
+
 
 # --- 1. 讀取 Google Sheet (標準答案) ---
 def get_reply_from_sheet(user_text):
@@ -49,9 +73,20 @@ def get_reply_from_sheet(user_text):
         print(f"Sheet Error: {e}")
         return None
 
+
 # --- 2. 呼叫 ChatGPT (AI 回覆) ---
-def get_chatgpt_reply(user_text):
+def get_chatgpt_reply(user_text, wp_user=None):
+    """
+    呼叫 GPT 產生回覆。
+    若 wp_user 不為 None，代表用戶已綁定 WordPress 帳號，
+    可在 system prompt 中插入個人化資訊。
+    """
     try:
+        # 若已綁定，在 prompt 加入用戶名字
+        user_name_hint = ''
+        if wp_user and wp_user.get('first_name'):
+            user_name_hint = f'\n\n【用戶資訊】這位用戶已綁定 LRMusic 帳號，名字是「{wp_user["first_name"]}」，可以在適當時機稱呼對方名字。'
+
         system_prompt = """
 你現在是【LRMusic 音樂小助教】，LRMusic 的專屬 AI 小提琴助教。
 你擁有極為豐富的音樂知識，特別專精於「小提琴」的演奏技巧（如運弓、指法、把位、音準）與樂理知識。
@@ -96,7 +131,7 @@ def get_chatgpt_reply(user_text):
 
 範例語氣：
 「這段旋律建議多用一點『抖音』來增加感染力。樂譜可以到 lirongmusic.net 找找看，目前持續上架中！也歡迎私訊 IG【提琴女伶洛莉】許願曲目。另外，洛莉有兩個 YouTube 頻道：喜歡國語老歌的可以訂閱【洛莉提琴・老歌時光】，每週三中午 12 點更新；喜歡動漫、韓劇 OST 的可以訂閱【LRMusic Violin】，每週五中午 12 點更新，歡迎來聽聽看！🎻」
-"""
+""" + user_name_hint
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -112,6 +147,7 @@ def get_chatgpt_reply(user_text):
         print(f"OpenAI Error: {e}")
         return "不好意思，我的大腦現在有點打結 (AI 連線錯誤)，請稍後再試。"
 
+
 # --- Webhook 入口 ---
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -123,10 +159,16 @@ def callback():
         abort(400)
     return 'OK'
 
+
 # --- 訊息處理主邏輯 ---
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    user_msg = event.message.text.strip()
+    user_msg     = event.message.text.strip()
+    line_user_id = event.source.user_id
+
+    # 查詢是否已綁定 WordPress 帳號
+    # 已綁定：{'wp_user_id': 123, 'email': '...', 'first_name': '洛莉'} 或 None
+    wp_user = get_wp_user_by_line_id(line_user_id)
 
     sheet_reply = get_reply_from_sheet(user_msg)
 
@@ -137,12 +179,14 @@ def handle_message(event):
     if sheet_reply:
         reply_text = sheet_reply
     else:
-        reply_text = get_chatgpt_reply(user_msg)
+        # 已綁定用戶傳入 wp_user，供 GPT 個性化回覆
+        reply_text = get_chatgpt_reply(user_msg, wp_user=wp_user)
 
     line_bot_api.reply_message(
         event.reply_token,
         TextSendMessage(text=reply_text)
     )
+
 
 # --- 加入好友歡迎訊息 ---
 @handler.add(FollowEvent)
@@ -174,6 +218,7 @@ def handle_follow(event):
         event.reply_token,
         TextSendMessage(text=welcome_text)
     )
+
 
 if __name__ == "__main__":
     app.run()
