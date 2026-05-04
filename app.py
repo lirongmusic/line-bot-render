@@ -222,7 +222,8 @@ def wish_create(line_user_id, song_title, artist, category):
                 f'🗳️ 完整排行：https://lirongmusic.net/wishes'
             )
         elif resp.status_code == 409:
-            rank = data.get('rank', '?')
+            # WP_Error 額外資料放在 data['data'] 內，非根層級
+            rank = data.get('data', {}).get('rank', '?')
             return False, f'你已經許願過「{song_title}」了！\n目前排名第 {rank} 名。'
         else:
             msg = data.get('message', '未知錯誤')
