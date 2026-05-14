@@ -363,6 +363,14 @@ def handle_message(event):
         return
     # ── 許願狀態機結束 ────────────────────────────────────────
 
+    # 後五碼偵測（純5位數字視為轉帳通知）
+    if user_msg.isdigit() and len(user_msg) == 5:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text='✅ 已收到您的轉帳末五碼，我們會盡快確認並與您聯絡，感謝您的耐心等候 🎻')
+        )
+        return
+
     # 查詢是否已綁定 WordPress 帳號（供 GPT 個性化回覆用）
     wp_user = get_wp_user_by_line_id(line_user_id)
 
